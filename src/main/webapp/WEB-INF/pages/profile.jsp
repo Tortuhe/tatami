@@ -31,6 +31,8 @@
                             <a href="/tatami/profile/${user.username}/" title="<fmt:message key="tatami.user.profile.show"/> @${user.username}">
                               @${user.username}
                             </a>
+                            <br/>
+                            API KEY  : ${user.apiKey}
                           </div>
                           <div id="is-follow-you"></div>
                           <div id='follow-action'></div>

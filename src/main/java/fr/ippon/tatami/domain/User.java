@@ -29,6 +29,17 @@ public class User {
     @JsonIgnore
     private String login;
 
+    @Column(name = "apiKey")
+    private String apiKey ;
+
+    public String getApiKey() {
+		return apiKey;
+	}
+
+	public void setApiKey(String apiKey) {
+		this.apiKey = apiKey;
+	}
+	
     @Column(name = "password")
     @JsonIgnore
     private String password;

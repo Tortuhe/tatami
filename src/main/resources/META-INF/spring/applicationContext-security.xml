@@ -20,6 +20,7 @@
     <http pattern="/tatami/syndic/**" security="none"/>
     <http pattern="/tatami/register/**" security="none"/>
     <http pattern="/tatami/lostpassword/**" security="none"/>
+    <http pattern="/tatami/API/**" security="none"/>
 
     <http auto-config="true" use-expressions="true" create-session="ifRequired">
         <remember-me key="tatamiRememberKey" token-validity-seconds="2592000"/>

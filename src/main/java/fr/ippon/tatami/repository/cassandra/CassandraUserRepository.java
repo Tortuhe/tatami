@@ -13,6 +13,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.security.authentication.encoding.ShaPasswordEncoder;
 import org.springframework.stereotype.Repository;
 
 import javax.inject.Inject;
@@ -50,6 +51,9 @@ public class CassandraUserRepository implements UserRepository {
         if (log.isDebugEnabled()) {
             log.debug("Creating user : " + user);
         }
+        ShaPasswordEncoder shaPasswordEncoder = new ShaPasswordEncoder();
+    	String apiKey = shaPasswordEncoder.encodePassword(user.getLogin(), user.getPassword());
+        user.setApiKey(apiKey) ;
         Set<ConstraintViolation<User>> constraintViolations = validator.validate(user, ContraintsUserCreation.class);
         if (!constraintViolations.isEmpty()) {
             throw new ConstraintViolationException(new HashSet<ConstraintViolation<?>>(constraintViolations));
