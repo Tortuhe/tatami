@@ -22,334 +22,333 @@ import java.util.regex.Pattern;
 @Service
 public class StatusUpdateService {
 
-	private final Log log = LogFactory.getLog(StatusUpdateService.class);
+    private final Log log = LogFactory.getLog(StatusUpdateService.class);
 
-	private final static Pattern PATTERN_LOGIN = Pattern.compile("@[^\\s]+");
+    private final static Pattern PATTERN_LOGIN = Pattern.compile("@[^\\s]+");
 
-	private static final Pattern PATTERN_HASHTAG = Pattern.compile("(^|\\s)#([^\\s !\"#$%&\'()*+,./:;<=>?@\\\\\\[\\]^_`{|}~-]+)");
+    private static final Pattern PATTERN_HASHTAG = Pattern.compile("(^|\\s)#([^\\s !\"#$%&\'()*+,./:;<=>?@\\\\\\[\\]^_`{|}~-]+)");
 
-	@Inject
-	private FollowerRepository followerRepository;
+    @Inject
+    private FollowerRepository followerRepository;
 
-	@Inject
-	private TagFollowerRepository tagFollowerRepository;
+    @Inject
+    private TagFollowerRepository tagFollowerRepository;
 
-	@Inject
-	private AuthenticationService authenticationService;
+    @Inject
+    private AuthenticationService authenticationService;
 
-	@Inject
-	private DaylineRepository daylineRepository;
+    @Inject
+    private DaylineRepository daylineRepository;
 
-	@Inject
-	private StatusRepository statusRepository;
+    @Inject
+    private StatusRepository statusRepository;
 
-	@Inject
-	private TimelineRepository timelineRepository;
+    @Inject
+    private TimelineRepository timelineRepository;
 
-	@Inject
-	private MentionlineRepository mentionlineRepository;
+    @Inject
+    private MentionlineRepository mentionlineRepository;
 
-	@Inject
-	private UserlineRepository userlineRepository;
+    @Inject
+    private UserlineRepository userlineRepository;
 
-	@Inject
-	private TaglineRepository taglineRepository;
+    @Inject
+    private TaglineRepository taglineRepository;
 
-	@Inject
-	private TagCounterRepository tagCounterRepository;
+    @Inject
+    private TagCounterRepository tagCounterRepository;
 
-	@Inject
-	private UserGroupRepository userGroupRepository;
+    @Inject
+    private UserGroupRepository userGroupRepository;
 
-	@Inject
-	private GrouplineRepository grouplineRepository;
+    @Inject
+    private GrouplineRepository grouplineRepository;
 
-	@Inject
-	private GroupMembersRepository groupMembersRepository;
+    @Inject
+    private GroupMembersRepository groupMembersRepository;
 
-	@Inject
-	private GroupService groupService;
+    @Inject
+    private GroupService groupService;
 
-	@Inject
-	private TrendRepository trendsRepository;
+    @Inject
+    private TrendRepository trendsRepository;
 
-	@Inject
-	private UserTrendRepository userTrendRepository;
+    @Inject
+    private UserTrendRepository userTrendRepository;
 
-	@Inject
-	private DiscussionRepository discussionRepository;
+    @Inject
+    private DiscussionRepository discussionRepository;
 
-	@Inject
-	private CounterRepository counterRepository;
+    @Inject
+    private CounterRepository counterRepository;
 
-	@Inject
-	private SearchService searchService;
+    @Inject
+    private SearchService searchService;
 
-	@Inject
-	private MailService mailService;
+    @Inject
+    private MailService mailService;
 
-	@Inject
-	private UserRepository userRepository;
+    @Inject
+    private UserRepository userRepository;
 
-	@Inject
-	private StatusAttachmentRepository statusAttachmentRepository;
+    @Inject
+    private StatusAttachmentRepository statusAttachmentRepository;
 
-	public void postStatus(String content, boolean statusPrivate, Collection<String> attachmentIds) {
-		createStatus(content, statusPrivate, null, "", "", "", attachmentIds);
-	}
-	
-	public void postStatus(String userLogin, String content, boolean statusPrivate, Collection<String> attachmentIds) {
+    public void postStatus(String content, boolean statusPrivate, Collection<String> attachmentIds) {
+        createStatus(content, statusPrivate, null, "", "", "", attachmentIds);
+    }
+
+    public void postStatus(String userLogin, String content, boolean statusPrivate, Collection<String> attachmentIds) {
 		createStatus(userLogin, content, statusPrivate, null, "", "", "", attachmentIds);
 	}
+    
+    public void postStatusToGroup(String content, Group group, Collection<String> attachmentIds) {
+        createStatus(content, false, group, "", "", "", attachmentIds);
+    }
 
-	public void postStatusToGroup(String content, Group group, Collection<String> attachmentIds) {
-		createStatus(content, false, group, "", "", "", attachmentIds);
-	}
+    public void replyToStatus(String content, String replyTo) throws ArchivedGroupException {
+        Status originalStatus = statusRepository.findStatusById(replyTo);
+        Group group = null;
+        if (originalStatus.getGroupId() != null) {
+            group = groupService.getGroupById(originalStatus.getDomain(), originalStatus.getGroupId());
 
-	public void replyToStatus(String content, String replyTo) throws ArchivedGroupException {
-		Status originalStatus = statusRepository.findStatusById(replyTo);
-		Group group = null;
-		if (originalStatus.getGroupId() != null) {
-			group = groupService.getGroupById(originalStatus.getDomain(), originalStatus.getGroupId());
+            if (group.isArchivedGroup()) {
+                throw new ArchivedGroupException();
+            }
+        }
+        if (!originalStatus.getReplyTo().equals("")) {
+            // Original status is also a reply, replying to the real original status instead
+            Status realOriginalStatus = statusRepository.findStatusById(originalStatus.getDiscussionId());
+            Status replyStatus = createStatus(
+                    content,
+                    realOriginalStatus.getStatusPrivate(),
+                    group,
+                    realOriginalStatus.getStatusId(),
+                    originalStatus.getStatusId(),
+                    originalStatus.getUsername());
 
-			if (group.isArchivedGroup()) {
-				throw new ArchivedGroupException();
-			}
-		}
-		if (!originalStatus.getReplyTo().equals("")) {
-			// Original status is also a reply, replying to the real original status instead
-			Status realOriginalStatus = statusRepository.findStatusById(originalStatus.getDiscussionId());
-			Status replyStatus = createStatus(
-					content,
-					realOriginalStatus.getStatusPrivate(),
-					group,
-					realOriginalStatus.getStatusId(),
-					originalStatus.getStatusId(),
-					originalStatus.getUsername());
+            discussionRepository.addReplyToDiscussion(realOriginalStatus.getStatusId(), replyStatus.getStatusId());
+        } else {
+            // The original status of the discussion is the one we reply to
+            Status replyStatus =
+                    createStatus(content,
+                            originalStatus.getStatusPrivate(),
+                            group,
+                            replyTo,
+                            replyTo,
+                            originalStatus.getUsername());
 
-			discussionRepository.addReplyToDiscussion(realOriginalStatus.getStatusId(), replyStatus.getStatusId());
-		} else {
-			// The original status of the discussion is the one we reply to
-			Status replyStatus =
-					createStatus(content,
-							originalStatus.getStatusPrivate(),
-							group,
-							replyTo,
-							replyTo,
-							originalStatus.getUsername());
+            discussionRepository.addReplyToDiscussion(originalStatus.getStatusId(), replyStatus.getStatusId());
+        }
+    }
 
-			discussionRepository.addReplyToDiscussion(originalStatus.getStatusId(), replyStatus.getStatusId());
-		}
-	}
+    private Status createStatus(String content,
+                                boolean statusPrivate,
+                                Group group,
+                                String discussionId,
+                                String replyTo,
+                                String replyToUsername) {
 
-	private Status createStatus(String content,
-			boolean statusPrivate,
-			Group group,
-			String discussionId,
-			String replyTo,
-			String replyToUsername) {
+        return createStatus(content, statusPrivate, group, discussionId, replyTo, replyToUsername, new ArrayList<String>());
+    }
+    
+    private Status createStatus(String content,
+            boolean statusPrivate,
+            Group group,
+            String discussionId,
+            String replyTo,
+            String replyToUsername,
+            Collection<String> attachmentIds) {
+    	return createStatus(authenticationService.getCurrentUser().getLogin(), content, statusPrivate, group, discussionId, replyTo, replyToUsername, attachmentIds);
+    }
+    
+    private Status createStatus(String userLogin,
+    							String content,
+                                boolean statusPrivate,
+                                Group group,
+                                String discussionId,
+                                String replyTo,
+                                String replyToUsername,
+                                Collection<String> attachmentIds) {
 
-		return createStatus(content, statusPrivate, group, discussionId, replyTo, replyToUsername, new ArrayList<String>());
-	}
+        content = StringEscapeUtils.unescapeHtml(content);
+        long startTime = 0;
+        if (log.isDebugEnabled()) {
+            startTime = Calendar.getInstance().getTimeInMillis();
+            log.debug("Creating new status : " + content);
+        }
+        String username = DomainUtil.getUsernameFromLogin(userLogin);
+        String domain = DomainUtil.getDomainFromLogin(userLogin);
 
-	private Status createStatus(String userLogin,
-			String content,
-			boolean statusPrivate,
-			Group group,
-			String discussionId,
-			String replyTo,
-			String replyToUsername,
-			Collection<String> attachmentIds) {
+        Status status =
+                statusRepository.createStatus(userLogin,
+                        username,
+                        domain,
+                        statusPrivate,
+                        group,
+                        attachmentIds,
+                        content,
+                        discussionId,
+                        replyTo,
+                        replyToUsername);
 
-		content = StringEscapeUtils.unescapeHtml(content);
-		long startTime = 0;
-		if (log.isDebugEnabled()) {
-			startTime = Calendar.getInstance().getTimeInMillis();
-			log.debug("Creating new status : " + content);
-		}
-		String username = DomainUtil.getUsernameFromLogin(userLogin);
-		String domain = DomainUtil.getDomainFromLogin(userLogin);
+        if (attachmentIds != null && attachmentIds.size() > 0) {
+            for (String attachmentId : attachmentIds) {
+                statusAttachmentRepository.addAttachmentId(status.getStatusId(),
+                        attachmentId);
+            }
+        }
 
-		Status status =
-				statusRepository.createStatus(userLogin,
-						username,
-						domain,
-						statusPrivate,
-						group,
-						attachmentIds,
-						content,
-						discussionId,
-						replyTo,
-						replyToUsername);
+        // add status to the timeline
+        timelineRepository.addStatusToTimeline(userLogin, status);
 
-		if (attachmentIds != null && attachmentIds.size() > 0) {
-			for (String attachmentId : attachmentIds) {
-				statusAttachmentRepository.addAttachmentId(status.getStatusId(),
-						attachmentId);
-			}
-		}
+        if (status.getStatusPrivate() == true) { // Private status
+            // add status to the mentioned users' timeline
+            manageMentions(status, null, userLogin, domain, new ArrayList<String>());
 
-		// add status to the timeline
-		timelineRepository.addStatusToTimeline(userLogin, status);
+        } else { // Public status
+            Collection<String> followersForUser = followerRepository.findFollowersForUser(userLogin);
 
-		if (status.getStatusPrivate() == true) { // Private status
-			// add status to the mentioned users' timeline
-			manageMentions(status, null, userLogin, domain, new ArrayList<String>());
+            // add status to the dayline, userline
+            String day = StatsService.DAYLINE_KEY_FORMAT.format(status.getStatusDate());
+            daylineRepository.addStatusToDayline(status, day);
+            userlineRepository.addStatusToUserline(status);
 
-		} else { // Public status
-			Collection<String> followersForUser = followerRepository.findFollowersForUser(userLogin);
+            // add the status to the group line and group followers
+            manageGroups(status, group, followersForUser);
 
-			// add status to the dayline, userline
-			String day = StatsService.DAYLINE_KEY_FORMAT.format(status.getStatusDate());
-			daylineRepository.addStatusToDayline(status, day);
-			userlineRepository.addStatusToUserline(status);
+            // tag managgement
+            manageStatusTags(status, group);
 
-			// add the status to the group line and group followers
-			manageGroups(status, group, followersForUser);
+            // add status to the mentioned users' timeline
+            manageMentions(status, group, userLogin, domain, followersForUser);
 
-			// tag managgement
-			manageStatusTags(status, group);
+            // Increment status count for the current user
+            counterRepository.incrementStatusCounter(userLogin);
 
-			// add status to the mentioned users' timeline
-			manageMentions(status, group, userLogin, domain, followersForUser);
+            // Add to the searchStatus engine
+            searchService.addStatus(status);
+        }
 
-			// Increment status count for the current user
-			counterRepository.incrementStatusCounter(userLogin);
+        if (log.isDebugEnabled()) {
+            long finishTime = Calendar.getInstance().getTimeInMillis();
+            log.debug("Status created in " + (finishTime - startTime) + "ms.");
+        }
+        return status;
+    }
 
-			// Add to the searchStatus engine
-			searchService.addStatus(status);
-		}
+    private void manageGroups(Status status, Group group, Collection<String> followersForUser) {
+        if (group != null) {
+            grouplineRepository.addStatusToGroupline(status, group.getGroupId());
+            Collection<String> groupMemberLogins = groupMembersRepository.findMembers(group.getGroupId()).keySet();
+            // For all people following the group
+            for (String groupMemberLogin : groupMemberLogins) {
+                timelineRepository.addStatusToTimeline(groupMemberLogin, status);
+            }
+            if (isPublicGroup(group)) { // for people not following the group but following the user
+                for (String followerLogin : followersForUser) {
+                    if (!groupMemberLogins.contains(followerLogin)) {
+                        timelineRepository.addStatusToTimeline(followerLogin, status);
+                    }
+                }
+            }
+        } else { // only people following the user
+            for (String followerLogin : followersForUser) {
+                timelineRepository.addStatusToTimeline(followerLogin, status);
+            }
+        }
+    }
 
-		if (log.isDebugEnabled()) {
-			long finishTime = Calendar.getInstance().getTimeInMillis();
-			log.debug("Status created in " + (finishTime - startTime) + "ms.");
-		}
-		return status;
-	}
+    /**
+     * Parses the status to find tags, and add those tags to the TagLine and the Trends.
+     */
+    private void manageStatusTags(Status status, Group group) {
+        Matcher m = PATTERN_HASHTAG.matcher(status.getContent());
+        while (m.find()) {
+            String tag = m.group(2);
+            if (tag != null && !tag.isEmpty() && !tag.contains("#")) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Found tag : " + tag);
+                }
+                taglineRepository.addStatusToTagline(status, tag);
+                tagCounterRepository.incrementTagCounter(status.getDomain(), tag);
+                trendsRepository.addTag(status.getDomain(), tag);
+                userTrendRepository.addTag(status.getLogin(), tag);
 
-	private Status createStatus(String content,
-			boolean statusPrivate,
-			Group group,
-			String discussionId,
-			String replyTo,
-			String replyToUsername,
-			Collection<String> attachmentIds) {
+                // Add the status to all users following this tag
+                addStatusToTagFollowers(status, group, tag);
+            }
+        }
+    }
 
-		return createStatus(authenticationService.getCurrentUser().getLogin(), content, statusPrivate, group, discussionId, replyTo, replyToUsername, attachmentIds);
-	}
+    private void manageMentions(Status status, Group group, String currentLogin, String domain, Collection<String> followersForUser) {
+        Matcher m = PATTERN_LOGIN.matcher(status.getContent());
+        while (m.find()) {
+            String mentionedUsername = extractUsernameWithoutAt(m.group());
+            if (mentionedUsername != null &&
+                    !mentionedUsername.equals(currentLogin) &&
+                    !followersForUser.contains(mentionedUsername)) {
 
-	private void manageGroups(Status status, Group group, Collection<String> followersForUser) {
-		if (group != null) {
-			grouplineRepository.addStatusToGroupline(status, group.getGroupId());
-			Collection<String> groupMemberLogins = groupMembersRepository.findMembers(group.getGroupId()).keySet();
-			// For all people following the group
-			for (String groupMemberLogin : groupMemberLogins) {
-				timelineRepository.addStatusToTimeline(groupMemberLogin, status);
-			}
-			if (isPublicGroup(group)) { // for people not following the group but following the user
-				for (String followerLogin : followersForUser) {
-					if (!groupMemberLogins.contains(followerLogin)) {
-						timelineRepository.addStatusToTimeline(followerLogin, status);
-					}
-				}
-			}
-		} else { // only people following the user
-			for (String followerLogin : followersForUser) {
-				timelineRepository.addStatusToTimeline(followerLogin, status);
-			}
-		}
-	}
+                if (log.isDebugEnabled()) {
+                    log.debug("Mentionning : " + mentionedUsername);
+                }
+                String mentionedLogin =
+                        DomainUtil.getLoginFromUsernameAndDomain(mentionedUsername, domain);
 
-	/**
-	 * Parses the status to find tags, and add those tags to the TagLine and the Trends.
-	 */
-	private void manageStatusTags(Status status, Group group) {
-		Matcher m = PATTERN_HASHTAG.matcher(status.getContent());
-		while (m.find()) {
-			String tag = m.group(2);
-			if (tag != null && !tag.isEmpty() && !tag.contains("#")) {
-				if (log.isDebugEnabled()) {
-					log.debug("Found tag : " + tag);
-				}
-				taglineRepository.addStatusToTagline(status, tag);
-				tagCounterRepository.incrementTagCounter(status.getDomain(), tag);
-				trendsRepository.addTag(status.getDomain(), tag);
-				userTrendRepository.addTag(status.getLogin(), tag);
+                // If this is a private group, and if the mentioned user is not in the group, he will not see the status
+                if (!isPublicGroup(group)) {
+                    Collection<String> groupIds = userGroupRepository.findGroups(mentionedLogin);
+                    if (groupIds.contains(group.getGroupId())) { // The user is part of the private group
+                        mentionUser(status, mentionedLogin);
+                    }
+                } else { // This is a public status
+                    mentionUser(status, mentionedLogin);
+                }
+            }
+        }
+    }
 
-				// Add the status to all users following this tag
-				addStatusToTagFollowers(status, group, tag);
-			}
-		}
-	}
+    private void addStatusToTagFollowers(Status status, Group group, String tag) {
+        Collection<String> followersForTag =
+                tagFollowerRepository.findFollowers(status.getDomain(), tag);
 
-	private void manageMentions(Status status, Group group, String currentLogin, String domain, Collection<String> followersForUser) {
-		Matcher m = PATTERN_LOGIN.matcher(status.getContent());
-		while (m.find()) {
-			String mentionedUsername = extractUsernameWithoutAt(m.group());
-			if (mentionedUsername != null &&
-					!mentionedUsername.equals(currentLogin) &&
-					!followersForUser.contains(mentionedUsername)) {
+        if (isPublicGroup(group)) { // This is a public status
+            for (String followerLogin : followersForTag) {
+                timelineRepository.addStatusToTimeline(followerLogin, status);
+            }
+        } else {  // This is private status
+            for (String followerLogin : followersForTag) {
+                Collection<String> groupIds = userGroupRepository.findGroups(followerLogin);
+                if (groupIds.contains(group.getGroupId())) { // The user is part of the private group
+                    timelineRepository.addStatusToTimeline(followerLogin, status);
+                }
+            }
+        }
+    }
 
-				if (log.isDebugEnabled()) {
-					log.debug("Mentionning : " + mentionedUsername);
-				}
-				String mentionedLogin =
-						DomainUtil.getLoginFromUsernameAndDomain(mentionedUsername, domain);
+    /**
+     * A status that mentions a user is put in the user's mentionline and in his timeline.
+     * The mentioned user can also be notified by email.
+     */
+    private void mentionUser(Status status, String mentionedLogin) {
+        mentionlineRepository.addStatusToMentionline(mentionedLogin, status);
+        timelineRepository.addStatusToTimeline(mentionedLogin, status);
+        User mentionnedUser = userRepository.findUserByLogin(mentionedLogin);
 
-				// If this is a private group, and if the mentioned user is not in the group, he will not see the status
-				if (!isPublicGroup(group)) {
-					Collection<String> groupIds = userGroupRepository.findGroups(mentionedLogin);
-					if (groupIds.contains(group.getGroupId())) { // The user is part of the private group
-						mentionUser(status, mentionedLogin);
-					}
-				} else { // This is a public status
-					mentionUser(status, mentionedLogin);
-				}
-			}
-		}
-	}
+        if (mentionnedUser != null && (mentionnedUser.getPreferencesMentionEmail() == null || mentionnedUser.getPreferencesMentionEmail().equals(true))) {
+            if (status.getStatusPrivate() == true) { // Private status
+                mailService.sendUserPrivateMessageEmail(status, mentionnedUser);
+            } else {
+                mailService.sendUserMentionEmail(status, mentionnedUser);
+            }
+        }
+    }
 
-	private void addStatusToTagFollowers(Status status, Group group, String tag) {
-		Collection<String> followersForTag =
-				tagFollowerRepository.findFollowers(status.getDomain(), tag);
+    private String extractUsernameWithoutAt(String dest) {
+        return dest.substring(1, dest.length());
+    }
 
-		if (isPublicGroup(group)) { // This is a public status
-			for (String followerLogin : followersForTag) {
-				timelineRepository.addStatusToTimeline(followerLogin, status);
-			}
-		} else {  // This is private status
-			for (String followerLogin : followersForTag) {
-				Collection<String> groupIds = userGroupRepository.findGroups(followerLogin);
-				if (groupIds.contains(group.getGroupId())) { // The user is part of the private group
-					timelineRepository.addStatusToTimeline(followerLogin, status);
-				}
-			}
-		}
-	}
-
-	/**
-	 * A status that mentions a user is put in the user's mentionline and in his timeline.
-	 * The mentioned user can also be notified by email.
-	 */
-	private void mentionUser(Status status, String mentionedLogin) {
-		mentionlineRepository.addStatusToMentionline(mentionedLogin, status);
-		timelineRepository.addStatusToTimeline(mentionedLogin, status);
-		User mentionnedUser = userRepository.findUserByLogin(mentionedLogin);
-
-		if (mentionnedUser != null && (mentionnedUser.getPreferencesMentionEmail() == null || mentionnedUser.getPreferencesMentionEmail().equals(true))) {
-			if (status.getStatusPrivate() == true) { // Private status
-				mailService.sendUserPrivateMessageEmail(status, mentionnedUser);
-			} else {
-				mailService.sendUserMentionEmail(status, mentionnedUser);
-			}
-		}
-	}
-
-	private String extractUsernameWithoutAt(String dest) {
-		return dest.substring(1, dest.length());
-	}
-
-	private boolean isPublicGroup(Group group) {
-		return group == null || group.isPublicGroup();
-	}
+    private boolean isPublicGroup(Group group) {
+        return group == null || group.isPublicGroup();
+    }
 }
